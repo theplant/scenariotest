@@ -10,8 +10,8 @@ module Scenariotest
         self.blk = blk
       end
 
-      def call(from_dump)
-        self.blk.call(from_dump)
+      def call(dependency_call)
+        self.blk.call(dependency_call)
       end
     end
 
@@ -45,8 +45,13 @@ module Scenariotest
         @data[name] = value
       end
 
-      def changed(&blk)
-        @changed_data = {}
+      def changed(dependency_call, &blk)
+        if dependency_call # don't clear changed_data
+          @changed_data ||= {}
+        else
+          @changed_data = {}
+        end
+
         blk.call
         @changed_data
       end
@@ -91,24 +96,24 @@ module Scenariotest
           Digest::SHA1.hexdigest(source_path << File.read(source_path))
         end
 
-        methods_hash[name] = Sha1Lambda.new(source_sha1) do |from_dump|
-          if !from_dump || !self.driver.load(name, source_sha1)
-            changed_data = self.changed do
+        methods_hash[name] = Sha1Lambda.new(source_sha1) do |dependency_call|
+
+          loaded = unless dependency_call
+            self.driver.load(name, source_sha1)
+          end
+
+          unless loaded
+            changed_data = self.changed(dependency_call) do
               ActiveRecord::Base.transaction do
                 if options[:req]
                   [options[:req]].flatten.each do |req_name|
-                    invoke(req_name, false)
+                    invoke(req_name, true)
                   end
                 end
                 blk.call
               end
             end
-
-            Rails.logger.debug name.inspect
-            Rails.logger.debug "=" * 100
-            Rails.logger.debug changed_data.inspect
-
-            self.driver.dump(name, source_sha1, changed_data)
+            self.driver.dump(name, source_sha1, changed_data) unless dependency_call
           end
           nil
         end
@@ -116,8 +121,8 @@ module Scenariotest
 
       private
 
-      def invoke(name, from_dump = true)
-        (sha1lambda = methods_hash[name]) ? sha1lambda.call(from_dump) : not_defined!(name)
+      def invoke(name, dependency_call = false)
+        (sha1lambda = methods_hash[name]) ? sha1lambda.call(dependency_call) : not_defined!(name)
       end
 
       def not_defined!(name)
