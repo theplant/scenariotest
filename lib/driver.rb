@@ -97,7 +97,9 @@ module Scenariotest
     def empty_data(source_sha1)
       f = dump_file("empty_data", source_sha1, "sql")
       unless File.exist?(f)
-        run("dump", f, "--no-data" => nil, "--ignore-table"=>"#{config['database']}.schema_migration")
+        truncate_sql = ActiveRecord::Base.connection.tables.map{|t| "TRUNCATE `#{t}`;"}.join("\n")
+        File.write(f, "-- clear data\n" << truncate_sql)
+        # run("dump", f, "--no-data" => nil, "--ignore-table"=>"#{config['database']}.schema_migration")
       end
       run("load", f)
     end
@@ -146,7 +148,7 @@ module Scenariotest
         YAML.dump(changed_data, f)
       end
 
-      run("dump", dump_file(name, source_sha1, "sql"))
+      run("dump", dump_file(name, source_sha1, "sql"), "--no-create-info" => nil)
     end
 
   end
