@@ -23,13 +23,17 @@ module Scenariotest
       found ? full_path_command : abort("Couldn't find database client: #{commands.join(', ')}. Check your $PATH and try again.")
     end
 
-    def run(type, file)
-
-      database_config = @app.config.database_configuration
-      unless config = database_config[Rails.env]
-        abort "No database is configured for the environment '#{Rails.env}'"
+    def config
+      @config ||= begin
+        database_config = @app.config.database_configuration
+        unless c = database_config[Rails.env]
+          abort "No database is configured for the environment '#{Rails.env}'"
+        end
+        c
       end
+    end
 
+    def run(type, file, options={})
       cmd = case config["adapter"]
       when /^mysql/
         args = {
@@ -40,6 +44,14 @@ module Scenariotest
           'encoding'  => '--default-character-set',
           'password'  => '--password'
         }.map { |opt, arg| "#{arg}=#{config[opt]}" if config[opt] }.compact
+
+        args << (options.map do |name, value|
+          if value.blank?
+            " #{name}"
+          else
+            " #{name}=#{value}"
+          end
+        end).join("")
 
         args << config['database']
 
@@ -80,6 +92,14 @@ module Scenariotest
       def instance
         @instance ||= new(Rails.application)
       end
+    end
+
+    def empty_data(source_sha1)
+      f = dump_file("empty_data", source_sha1, "sql")
+      unless File.exist?(f)
+        run("dump", f, "--no-data" => nil, "--ignore-table"=>"#{config['database']}.schema_migration")
+      end
+      run("load", f)
     end
 
     def load(name, source_sha1)

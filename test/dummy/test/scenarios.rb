@@ -12,3 +12,7 @@ S.define :drinks do
   S[:latte] = Cafe::Drink.create!(:name => "Latte", :color => 9)
 end
 
+S.define :starbucks_with_drinks, :req => [:cafes, :drinks] do
+  S[:starbucks].drinks << S[:orange_juice]
+  S[:starbucks].drinks << S[:latte]
+end

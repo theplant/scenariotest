@@ -14,6 +14,7 @@
 ActiveRecord::Schema.define(:version => 20120124164416) do
 
   create_table "cafe_drinks", :force => true do |t|
+    t.integer  "store_id"
     t.string   "name"
     t.integer  "color"
     t.datetime "created_at"

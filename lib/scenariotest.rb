@@ -17,7 +17,7 @@ module Scenariotest
 
     class << self
       def init
-        Rails.logger.info("Fixtures are disabled when using Scenariotest.")
+        log("Fixtures are disabled when using Scenariotest.")
         ActiveRecord::TestFixtures.class_eval <<-EOF
           def setup_fixtures
           end
@@ -31,6 +31,10 @@ module Scenariotest
 
       def driver
         @driver ||= Scenariotest::Driver.instance
+      end
+
+      def log(message)
+        Rails.logger.info(message) if const_defined?(:Rails)
       end
 
       def []=(name, value)
@@ -77,14 +81,22 @@ module Scenariotest
       def setup(*method_names)
         @invoked_list = []
         method_name = if method_names.length > 1
-          collection_sha1 = Digest::SHA1.hexdigest(method_names.map{|name| methods_hash[name].nil? ? not_defined!(name) : methods_hash[name].sha1}.join("\n"))
+          sha1s = method_names.map{|name| methods_hash[name].nil? ? not_defined!(name) : methods_hash[name].sha1}
+          collection_sha1 = if sha1s.uniq.size == 1
+            sha1s[0]
+          else
+            Digest::SHA1.hexdigest(sha1s.join("\n"))
+          end
           m = "__#{method_names.join("_")}".to_sym
           define(m, :req => method_names, :source_sha1 => collection_sha1) {} unless methods_hash[m]
           m
         else
-          method_names.first
+          method_names[0]
         end
 
+        log("\n\n===== Scenariotest setup: #{method_name} =====\n")
+
+        self.driver.empty_data(methods_hash[method_name].sha1)
         req(method_name)
       end
 
