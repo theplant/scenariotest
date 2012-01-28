@@ -56,7 +56,7 @@ module Scenariotest
         args << config['database']
 
         commands, direct = if type == 'dump'
-          [['mysqldump', 'mysqldump5'], ">"]
+          [['mysqldump', 'mysqldump5'], ">>"]
         else
           [['mysql', 'mysql5'], "<"]
         end
@@ -69,7 +69,7 @@ module Scenariotest
         ENV['PGPASSWORD'] = config["password"].to_s if config["password"]
 
         commands, direct = if type == 'dump'
-          [['psqldump'], ">"]
+          [['psqldump'], ">>"]
         else
           [['psql'], "<"]
         end
@@ -147,8 +147,15 @@ module Scenariotest
       File.open(dump_file(name, source_sha1, "objects.yml"), 'wb') do |f|
         YAML.dump(changed_data, f)
       end
+      File.open(dump_file(name, source_sha1, "sql"), 'wb') do |f|
+        truncate_sql = ActiveRecord::Base.connection.tables.map{|t| "TRUNCATE `#{t}`;"}.join("\n")
+        f.write("-- clear data start\n" << truncate_sql << "\n-- clear data end\n\n")
+      end
 
-      run("dump", dump_file(name, source_sha1, "sql"), "--no-create-info" => nil)
+      run("dump", dump_file(name, source_sha1, "sql"),
+        "--no-create-info" => nil,
+        "--skip-add-locks" => nil,
+        "--skip-triggers" => nil)
     end
 
   end

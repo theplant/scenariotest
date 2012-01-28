@@ -95,8 +95,6 @@ module Scenariotest
         end
 
         log("\n\n===== Scenariotest setup: #{method_name} =====\n")
-
-        self.driver.empty_data(methods_hash[method_name].sha1)
         req(method_name)
       end
 
@@ -115,6 +113,7 @@ module Scenariotest
           end
 
           unless loaded
+            self.driver.empty_data(source_sha1) unless dependency_call
             changed_data = self.changed(dependency_call) do
               ActiveRecord::Base.transaction do
                 if options[:req]
