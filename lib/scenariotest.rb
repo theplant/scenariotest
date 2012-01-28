@@ -1,4 +1,5 @@
 require 'driver'
+require 'log_subscriber'
 require 'digest'
 
 module Scenariotest

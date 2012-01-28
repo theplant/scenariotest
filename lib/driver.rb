@@ -1,3 +1,4 @@
+require "active_record"
 module Scenariotest
   class Driver
 
@@ -77,7 +78,7 @@ module Scenariotest
         [find_cmd(*commands), config["database"], direct, file].join(" ")
       end
 
-      Rails.logger.debug("Scenariotest: #{cmd}")
+      Rails.logger.debug("  Scenariotest: #{cmd}")
       system(cmd)
       true
     end
@@ -110,6 +111,8 @@ module Scenariotest
       yml_file = dump_file(name, source_sha1, "objects.yml")
       return false unless File.exist?(yml_file)
 
+      ActiveSupport::Notifications.instrument('load.scenariotest', :name => "%s (%s)" % [name, source_sha1]) do
+
       run("load", f)
 
       objs = YAML.load_file(yml_file)
@@ -139,10 +142,13 @@ module Scenariotest
         end
         Scenariotest::Scenario[name] = loaded_obj
       end
+
+      end
       true
     end
 
     def dump(name, source_sha1, changed_data)
+      ActiveSupport::Notifications.instrument('dump.scenariotest', :name => "%s (%s)" % [name, source_sha1]) do
 
       File.open(dump_file(name, source_sha1, "objects.yml"), 'wb') do |f|
         YAML.dump(changed_data, f)
@@ -156,6 +162,8 @@ module Scenariotest
         "--no-create-info" => nil,
         "--skip-add-locks" => nil,
         "--skip-triggers" => nil)
+
+      end
     end
 
   end
