@@ -7,6 +7,10 @@ S.define :cafes, :req => :dalian do
   S[:metoo] = Store.create!(:name => "Metoo", :city => S[:dalian])
 end
 
+S.after :cafes do
+  Store.biggest = S[:starbucks]
+end
+
 S.define :drinks do
   S[:orange_juice] = Cafe::Drink.create!(:name => "Orange Juice", :color => 1)
   S[:latte] = Cafe::Drink.create!(:name => "Latte", :color => 9)

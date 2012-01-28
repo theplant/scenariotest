@@ -4,16 +4,47 @@ require 'digest'
 
 module Scenariotest
   class Scenario
-    class Sha1Lambda
-      attr_accessor :sha1, :blk
-      def initialize(sha1, &blk)
-        self.sha1 = sha1
-        self.blk = blk
+    class LoadOrDump
+      attr_accessor :name, :sha1, :options, :main_blk, :after_blk, :scenario_klass
+
+      def initialize(scenario_klass, name, options, blk)
+        self.scenario_klass = scenario_klass
+        self.sha1 = options[:source_sha1]
+        self.sha1 ||= begin
+          source_path = blk.source_location[0].dup
+          Digest::SHA1.hexdigest(source_path << File.read(source_path))
+        end
+        self.name = name
+        self.options = options
+        self.main_blk = blk
       end
 
       def call(dependency_call)
-        self.blk.call(dependency_call)
+
+        loaded = unless dependency_call
+          scenario_klass.driver.load(self.name, sha1)
+        end
+
+        unless loaded
+          scenario_klass.driver.empty_data(sha1) unless dependency_call
+          changed_data = scenario_klass.changed(dependency_call) do
+            ActiveRecord::Base.transaction do
+              if options[:req]
+                [options[:req]].flatten.each do |req_name|
+                  scenario_klass.invoke(req_name, true)
+                end
+              end
+              self.main_blk.call
+            end
+          end
+          scenario_klass.driver.dump(name, sha1, changed_data) unless dependency_call
+        end
+
+        self.after_blk.call if self.after_blk
+        nil
       end
+
+
     end
 
     class << self
@@ -101,41 +132,19 @@ module Scenariotest
 
 
       def define name, options = {}, &blk
-        source_sha1 = options[:source_sha1]
-        source_sha1 ||= begin
-          source_path = blk.source_location[0].dup
-          Digest::SHA1.hexdigest(source_path << File.read(source_path))
-        end
+        methods_hash[name] = LoadOrDump.new(self, name, options, blk)
+      end
 
-        methods_hash[name] = Sha1Lambda.new(source_sha1) do |dependency_call|
+      def after name, &blk
+        not_defined!(name) unless methods_hash[name]
+        methods_hash[name].after_blk = blk
+      end
 
-          loaded = unless dependency_call
-            self.driver.load(name, source_sha1)
-          end
-
-          unless loaded
-            self.driver.empty_data(source_sha1) unless dependency_call
-            changed_data = self.changed(dependency_call) do
-              ActiveRecord::Base.transaction do
-                if options[:req]
-                  [options[:req]].flatten.each do |req_name|
-                    invoke(req_name, true)
-                  end
-                end
-                blk.call
-              end
-            end
-            self.driver.dump(name, source_sha1, changed_data) unless dependency_call
-          end
-          nil
-        end
+      def invoke(name, dependency_call = false)
+        (load_or_dump = methods_hash[name]) ? load_or_dump.call(dependency_call) : not_defined!(name)
       end
 
       private
-
-      def invoke(name, dependency_call = false)
-        (sha1lambda = methods_hash[name]) ? sha1lambda.call(dependency_call) : not_defined!(name)
-      end
 
       def not_defined!(name)
         raise("`#{name.inspect}' not defined.")

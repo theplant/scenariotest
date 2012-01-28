@@ -10,4 +10,8 @@ class StoreTest < ActiveSupport::TestCase
     assert S[:metoo].city
   end
 
+  test "transient variable set" do
+    assert Store.biggest
+  end
+
 end
