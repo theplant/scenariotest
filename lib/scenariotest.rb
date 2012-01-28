@@ -20,23 +20,48 @@ module Scenariotest
 
       end
 
+      def root?
+        self.options[:req].blank?
+      end
+
+      def root_cache_name
+        "___root_#{self.name}"
+      end
+
       def call
         loaded = scenario_klass.driver.load(self.name, sha1)
 
         deps = uniq_dependencies
 
         unless loaded
+
+          # dump all the reuseable roots
+          roots = deps.select{|d| d.root? }
+          roots.each do |dep|
+            next if scenario_klass.driver.can_load?(dep.root_cache_name, dep.sha1)
+            scenario_klass.driver.empty_data(sha1)
+            dep_changed_data = scenario_klass.changed do
+              dep.main_blk.call
+            end
+            scenario_klass.driver.dump(dep.root_cache_name, dep.sha1, dep_changed_data, false)
+          end
+
           scenario_klass.driver.empty_data(sha1)
           changed_data = scenario_klass.changed do
-            ActiveRecord::Base.transaction do
-              if deps.each do |dep|
-                  dep.main_blk.call
-                end
+            deps.each do |dep|
+              if dep.root? && scenario_klass.driver.load(dep.root_cache_name, dep.sha1) # only no dependencies scenarios can be cached
+                # loaded from dump
+              else
+                dep.main_blk.call
               end
-              self.main_blk.call
             end
+
+            self.main_blk.call
+
           end
+
           scenario_klass.driver.dump(name, sha1, changed_data)
+
         end
 
         deps.each {|dep| dep.after_blk.call if dep.after_blk }
@@ -66,7 +91,7 @@ module Scenariotest
           end
         EOF
         @data = {}
-        @changed_data = {}
+        @changed_data_stack = [{}]
         self
       end
 
@@ -86,14 +111,18 @@ module Scenariotest
           [value.class.name, value.id]
         end
 
-        @changed_data[name] = changed_data_value
+        @changed_data_stack[-1][name] = changed_data_value
         @data[name] = value
       end
 
       def changed(&blk)
-        @changed_data = {}
+        @changed_data_stack << {}
         blk.call
-        @changed_data
+        changed = @changed_data_stack.pop
+        # if @changed_data_stack[-1]
+        #   @changed_data_stack[-1].update(changed)
+        # end
+        changed
       end
 
       def [](name)

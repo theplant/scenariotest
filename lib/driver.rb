@@ -79,7 +79,7 @@ module Scenariotest
       end
 
       Rails.logger.debug("  Scenariotest: #{cmd}")
-      system(cmd)
+      raise "failed running #{cmd}" unless system(cmd)
       true
     end
 
@@ -129,6 +129,14 @@ module Scenariotest
       run("load", f)
     end
 
+    def can_load?(name, source_sha1)
+      f = dump_file(name, source_sha1, "sql")
+      return false unless File.exist?(f)
+      yml_file = dump_file(name, source_sha1, "objects.yml")
+      return false unless File.exist?(yml_file)
+      true
+    end
+
     def load(name, source_sha1)
       f = dump_file(name, source_sha1, "sql")
       return false unless File.exist?(f)
@@ -171,15 +179,18 @@ module Scenariotest
       true
     end
 
-    def dump(name, source_sha1, changed_data)
+    def dump(name, source_sha1, changed_data, truncate = true)
       ActiveSupport::Notifications.instrument('dump.scenariotest', :name => "%s (%s)" % [name, source_sha1]) do
 
       File.open(dump_file(name, source_sha1, "objects.yml"), 'wb') do |f|
         YAML.dump(changed_data, f)
       end
-      File.open(dump_file(name, source_sha1, "sql"), 'wb') do |f|
-        truncate_sql = ActiveRecord::Base.connection.tables.map{|t| "TRUNCATE `#{t}`;"}.join("\n")
-        f.write("-- clear data start\n" << truncate_sql << "\n-- clear data end\n\n")
+
+      if truncate
+        File.open(dump_file(name, source_sha1, "sql"), 'wb') do |f|
+          truncate_sql = ActiveRecord::Base.connection.tables.map{|t| "TRUNCATE `#{t}`;"}.join("\n")
+          f.write("-- clear data start\n" << truncate_sql << "\n-- clear data end\n\n")
+        end
       end
 
       run("dump", dump_file(name, source_sha1, "sql"),
