@@ -95,6 +95,30 @@ module Scenariotest
       end
     end
 
+    def setup(senario_klass, method_names)
+      definations = senario_klass.definations
+
+      method_name = if method_names.length > 1
+        sha1s = method_names.map{|name| definations[name].nil? ? senario_klass.not_defined!(name) : definations[name].sha1}
+        collection_sha1 = if sha1s.uniq.size == 1
+          sha1s[0]
+        else
+          Digest::SHA1.hexdigest(sha1s.join("\n"))
+        end
+        m = "__#{method_names.join("_")}".to_sym
+        senario_klass.define(m, :req => method_names, :source_sha1 => collection_sha1) {} unless definations[m]
+        m
+      else
+        method_names[0]
+      end
+
+      ActiveSupport::Notifications.instrument('setup.scenariotest', :name => "%s" % [method_name]) do
+        Rails.logger.info("\n\n* Scenariotest Setup Started: #{method_name}")
+        senario_klass.invoke(method_name)
+      end
+    end
+
+
     def empty_data(source_sha1)
       f = dump_file("empty_data", source_sha1, "sql")
       unless File.exist?(f)

@@ -4,7 +4,7 @@ require 'digest'
 
 module Scenariotest
   class Scenario
-    class LoadOrDump
+    class Defination
       attr_accessor :name, :sha1, :options, :main_blk, :after_blk, :scenario_klass
 
       def initialize(scenario_klass, name, options, blk)
@@ -17,33 +17,42 @@ module Scenariotest
         self.name = name
         self.options = options
         self.main_blk = blk
+
       end
 
-      def call(dependency_call)
+      def call
+        loaded = scenario_klass.driver.load(self.name, sha1)
 
-        loaded = unless dependency_call
-          scenario_klass.driver.load(self.name, sha1)
-        end
+        deps = uniq_dependencies
 
         unless loaded
-          scenario_klass.driver.empty_data(sha1) unless dependency_call
-          changed_data = scenario_klass.changed(dependency_call) do
+          scenario_klass.driver.empty_data(sha1)
+          changed_data = scenario_klass.changed do
             ActiveRecord::Base.transaction do
-              if options[:req]
-                [options[:req]].flatten.each do |req_name|
-                  scenario_klass.invoke(req_name, true)
+              if deps.each do |dep|
+                  dep.main_blk.call
                 end
               end
               self.main_blk.call
             end
           end
-          scenario_klass.driver.dump(name, sha1, changed_data) unless dependency_call
+          scenario_klass.driver.dump(name, sha1, changed_data)
         end
 
+        deps.each {|dep| dep.after_blk.call if dep.after_blk }
         self.after_blk.call if self.after_blk
         nil
       end
 
+      def uniq_dependencies(list = [])
+        [self.options[:req]].flatten.compact.reverse.each do |name|
+          dep = scenario_klass.definations[name]
+          scenario_klass.not_defined!(name) if dep.nil?
+          dep.uniq_dependencies(list)
+          list << dep unless list.include?(dep)
+        end
+        list
+      end
 
     end
 
@@ -81,13 +90,8 @@ module Scenariotest
         @data[name] = value
       end
 
-      def changed(dependency_call, &blk)
-        if dependency_call # don't clear changed_data
-          @changed_data ||= {}
-        else
-          @changed_data = {}
-        end
-
+      def changed(&blk)
+        @changed_data = {}
         blk.call
         @changed_data
       end
@@ -100,59 +104,32 @@ module Scenariotest
         load __FILE__
       end
 
-      # For not create duplicate calls
-      def req(*method_names)
-        @invoked_list ||= []
-        method_names.each do |method_name|
-          next if @invoked_list.include?(method_name)
-          @invoked_list << method_name
-          invoke(method_name)
-        end
-      end
-
-      def setup(*method_names)
-        @invoked_list = []
-        method_name = if method_names.length > 1
-          sha1s = method_names.map{|name| methods_hash[name].nil? ? not_defined!(name) : methods_hash[name].sha1}
-          collection_sha1 = if sha1s.uniq.size == 1
-            sha1s[0]
-          else
-            Digest::SHA1.hexdigest(sha1s.join("\n"))
-          end
-          m = "__#{method_names.join("_")}".to_sym
-          define(m, :req => method_names, :source_sha1 => collection_sha1) {} unless methods_hash[m]
-          m
-        else
-          method_names[0]
-        end
-
-        log("\n\n===== Scenariotest setup: #{method_name} =====\n")
-        req(method_name)
-      end
-
 
       def define name, options = {}, &blk
-        methods_hash[name] = LoadOrDump.new(self, name, options, blk)
+        definations[name] = Defination.new(self, name, options, blk)
       end
 
       def after name, &blk
-        not_defined!(name) unless methods_hash[name]
-        methods_hash[name].after_blk = blk
+        not_defined!(name) unless definations[name]
+        definations[name].after_blk = blk
       end
 
-      def invoke(name, dependency_call = false)
-        (load_or_dump = methods_hash[name]) ? load_or_dump.call(dependency_call) : not_defined!(name)
+      def setup(*names)
+        self.driver.setup(self, names)
       end
 
-      private
+      def invoke(name)
+        (load_or_dump = definations[name]) ? load_or_dump.call : not_defined!(name)
+      end
+
+      def definations
+        (@definations ||= {})
+      end
 
       def not_defined!(name)
         raise("`#{name.inspect}' not defined.")
       end
 
-      def methods_hash
-        (@methods_hash ||= {})
-      end
     end
   end
 
