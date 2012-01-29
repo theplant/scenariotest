@@ -123,7 +123,7 @@ module Scenariotest
       f = dump_file("empty_data", source_sha1, "sql")
       unless File.exist?(f)
         truncate_sql = ActiveRecord::Base.connection.tables.map{|t| "TRUNCATE `#{t}`;"}.join("\n")
-        File.write(f, "-- clear data\n" << truncate_sql)
+        File.open(f, "w"){|fh| fh.write("-- clear data\n" << truncate_sql)}
         # run("dump", f, "--no-data" => nil, "--ignore-table"=>"#{config['database']}.schema_migration")
       end
       run("load", f)
