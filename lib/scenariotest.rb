@@ -95,6 +95,10 @@ module Scenariotest
         self
       end
 
+      def data
+        @data
+      end
+
       def driver
         @driver ||= Scenariotest::Driver.instance
       end
