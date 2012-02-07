@@ -4,7 +4,7 @@ require 'rails/test_help'
 
 S = Scenariotest::Scenario.init
 
-require 'scenarios'
+require File.expand_path('../scenarios', __FILE__)
 
 class ActiveSupport::TestCase
   # Setup all fixtures in test/fixtures/*.(yml|csv) for all tests in alphabetical order.
