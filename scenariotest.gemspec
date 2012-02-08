@@ -26,16 +26,16 @@ Gem::Specification.new do |s|
   s.extra_rdoc_files = ["README.markdown"]
 
   s.test_files = s.files.select { |path| path =~ /^test\/test_.*\.rb/ }
-
-end
   # = MANIFEST =
   s.files = %w[
-    Gemfile
-    Gemfile.lock
+    LICENSE
     README.markdown
-    lib/driver.rb
-    lib/log_subscriber.rb
+    Rakefile
     lib/scenariotest.rb
+    lib/scenariotest/driver.rb
+    lib/scenariotest/log_subscriber.rb
     scenariotest.gemspec
   ]
   # = MANIFEST =
+
+end
