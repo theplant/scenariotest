@@ -3,7 +3,7 @@ require 'scenariotest/log_subscriber'
 require 'digest'
 
 module Scenariotest
-  VERSION = "0.1.0"
+  VERSION = "0.1.1"
   class Scenario
     class Defination
       attr_accessor :name, :sha1, :options, :main_blk, :after_blk, :scenario_klass
