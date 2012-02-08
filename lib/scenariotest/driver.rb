@@ -160,7 +160,7 @@ module Scenariotest
 
       objs_identity_map = {}
       klass_ids_map.each do |klass, ids|
-        klass.constantize.find(ids).each do |obj|
+        klass.constantize.unscoped.find(ids).each do |obj|
           objs_identity_map["#{klass}_#{obj.id}"] = obj
         end
       end
